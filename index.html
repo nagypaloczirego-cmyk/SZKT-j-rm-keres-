@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>SZKT - Megálló kereső</title>
+<style>
+body { font-family: Arial; padding: 10px; }
+input { width: 100%; padding: 10px; font-size: 18px; }
+.stop { padding: 8px; cursor: pointer; border-bottom: 1px solid #ccc; }
+.stop:hover { background: #f3f3f3; }
+.departure { padding: 6px; border-bottom: 1px solid #ddd; }
+.arrow { cursor: pointer; font-weight: bold; padding-left: 8px; }
+.small { font-size: 13px; color: gray; }
+.low { color: blue; font-weight: bold; }
+.realtime { color: green; font-weight: bold; }
+</style>
+</head>
+
+<body>
+
+<h2>🚏 Megálló kereső</h2>
+<input id="search" placeholder="Megálló neve..." />
+
+<div id="stopList"></div>
+
+<h3 id="stopTitle"></h3>
+<div id="result"></div>
+
+<script>
+let stops = [];
+
+async function loadStops() {
+    let res = await fetch("/stops");
+    stops = await res.json();
+}
+
+function renderStops(filter = "") {
+    let list = document.getElementById("stopList");
+    list.innerHTML = "";
+
+    stops
+        .filter(s => s.value.toLowerCase().includes(filter.toLowerCase()))
+        .forEach(s => {
+            let div = document.createElement("div");
+            div.className = "stop";
+            div.textContent = s.value;
+            div.onclick = () => loadDepartures(s.LocationId, s.value);
+            list.appendChild(div);
+        });
+}
+
+async function loadDepartures(id, name) {
+    document.getElementById("stopTitle").textContent = "⏳ " + name;
+    let res = await fetch(`/departures/${id}`);
+    let data = await res.json();
+
+    let html = "";
+    data.forEach((d, i) => {
+        html += `
+        <div class="departure">
+            <b>${d.line}</b> → ${d.dest}
+            ${d.lowFloor ? "<span class='low'>♿</span>" : ""}
+            ${d.realTime ? "<span class='realtime'>➤</span>" : ""}
+            <span class="small">(${Math.round(d.departure/60)} perc)</span>
+            <span class="arrow" onclick="loadPlate('${d.id}', '${d.line}', ${i})">➜</span>
+            <span id="plate${i}" class="small"></span>
+        </div>`;
+    });
+
+    document.getElementById("result").innerHTML = html;
+}
+
+async function loadPlate(id, line, idx) {
+    let res = await fetch(`/vehicle?id=${id}&route=${line}`);
+    let info = await res.json();
+
+    document.getElementById(`plate${idx}`).textContent =
+        info.length > 0 ? info[0].VehicleRegistrationNumber : "?";
+}
+
+document.getElementById("search").oninput = (e) => renderStops(e.target.value);
+
+loadStops().then(()=>renderStops());
+</script>
+
+</body>
+</html>
